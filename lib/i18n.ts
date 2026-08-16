@@ -24,6 +24,9 @@ const dict: Record<Locale, Record<string, string>> = {
     "topbar.refresh": "Yenile",
     "topbar.refreshing": "Taranıyor...",
 
+    "settings.addressTitle": "Erişim Adresi",
+    "settings.addressDescription": "Bu paneli hangi adresten (ör. bir Cloudflare Tunnel/reverse proxy üzerinden) açtığını kaydet — sidebar'da hatırlatma olarak gösterilir.",
+    "settings.address": "Adres",
     "settings.title": "TrueNAS API Bağlantısı (opsiyonel)",
     "settings.description":
       "Periodic Snapshot Task'ları ve Replication Task'ları okuyarak backup analizini etkinleştirir. Salt-okunur bir API key kullanman önerilir.",
@@ -155,6 +158,9 @@ const dict: Record<Locale, Record<string, string>> = {
     "topbar.refresh": "Refresh",
     "topbar.refreshing": "Scanning...",
 
+    "settings.addressTitle": "Access Address",
+    "settings.addressDescription": "Save the address you open this dashboard from (e.g. via a Cloudflare Tunnel/reverse proxy) — shown as a reminder in the sidebar.",
+    "settings.address": "Address",
     "settings.title": "TrueNAS API Connection (optional)",
     "settings.description":
       "Reads Periodic Snapshot Tasks and Replication Tasks to enable backup analysis. A read-only API key is recommended.",

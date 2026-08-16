@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   // üzerinden bağlandığımız için SSH taşıması hiç kullanılmıyor — bu paketleri bundle etmek
   // yerine çalışma anında doğrudan require etmesi için "external" işaretliyoruz.
   serverExternalPackages: ["dockerode", "ssh2", "docker-modem", "better-sqlite3"],
+  devIndicators: false,
 };
 
 export default nextConfig;

@@ -7,11 +7,23 @@ fs.mkdirSync(dataDir, { recursive: true });
 
 const db = new Database(path.join(dataDir, "homelab-disaster-sim.db"));
 db.pragma("journal_mode = WAL");
-// next build eşzamanlı olarak birden fazla worker'da bu modülü import edip aynı dosyayı açabiliyor —
-// busy_timeout olmadan bu SQLITE_BUSY ile anında patlar; bunun yerine kilidin açılmasını bekler.
-db.pragma("busy_timeout = 5000");
+db.pragma("busy_timeout = 30000");
 
-db.exec(`
+// `next build` bu modülü şema kurulumu bittiğini beklemeden birden fazla worker'da eşzamanlı
+// import edebiliyor (sadece route export'larını incelemek için) — ALTER TABLE gibi şema
+// değiştiren komutlar busy_timeout'u her zaman kapsamıyor. Bu sadece build-time'a özgü bir
+// yarış durumu (tek process'te çalışan gerçek runtime'da hiç yaşanmıyor); bir worker
+// kilitlendiğinde sessizce devam ediyoruz, tablo/kolon zaten başka bir worker tarafından
+// oluşturulmuş olacak.
+function safeSchemaExec(sql: string) {
+  try {
+    db.exec(sql);
+  } catch (err) {
+    if ((err as { code?: string })?.code !== "SQLITE_BUSY") throw err;
+  }
+}
+
+safeSchemaExec(`
   CREATE TABLE IF NOT EXISTS local_state (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     lastSnapshot TEXT,
@@ -23,9 +35,26 @@ db.exec(`
     truenasError TEXT
   )
 `);
-db.prepare("INSERT OR IGNORE INTO local_state (id) VALUES (1)").run();
+try {
+  db.prepare("INSERT OR IGNORE INTO local_state (id) VALUES (1)").run();
+} catch (err) {
+  if ((err as { code?: string })?.code !== "SQLITE_BUSY") throw err;
+}
 
-db.exec(`
+// publicUrl sonradan eklendi — var olan kurulumlarda kolon olmayabilir. "Kolon var mı" kontrolü ile
+// asıl ALTER TABLE arasında başka bir worker'ın araya girip aynı kolonu eklemiş olması mümkün
+// (build-time'a özgü yarış) — "duplicate column" dahil buradaki her hatayı yutuyoruz, önemli olan
+// tek gerçek runtime process'inde kolonun sonunda var olması.
+try {
+  const localStateColumns = db.prepare("PRAGMA table_info(local_state)").all() as { name: string }[];
+  if (!localStateColumns.some((c) => c.name === "publicUrl")) {
+    db.exec("ALTER TABLE local_state ADD COLUMN publicUrl TEXT");
+  }
+} catch {
+  // yut — bkz. üstteki açıklama
+}
+
+safeSchemaExec(`
   CREATE TABLE IF NOT EXISTS external_backups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -69,7 +98,7 @@ export function deleteExternalBackup(id: number) {
   db.prepare("DELETE FROM external_backups WHERE id = ?").run(id);
 }
 
-db.exec(`
+safeSchemaExec(`
   CREATE TABLE IF NOT EXISTS excluded_pools (
     pool TEXT PRIMARY KEY,
     excludedAt TEXT NOT NULL DEFAULT (datetime('now'))
@@ -88,7 +117,7 @@ export function includePool(pool: string) {
   db.prepare("DELETE FROM excluded_pools WHERE pool = ?").run(pool);
 }
 
-db.exec(`
+safeSchemaExec(`
   CREATE TABLE IF NOT EXISTS excluded_datasets (
     dataset TEXT PRIMARY KEY,
     excludedAt TEXT NOT NULL DEFAULT (datetime('now'))
@@ -116,6 +145,7 @@ export type LocalState = {
   truenasApiKey: string | null;
   truenasBackupData: string | null;
   truenasError: string | null;
+  publicUrl: string | null;
 };
 
 export function getLocalState(): LocalState {
@@ -142,6 +172,10 @@ export function saveTrueNasBackupData(dataJson: string) {
 
 export function saveTrueNasError(error: string) {
   db.prepare("UPDATE local_state SET truenasError = ? WHERE id = 1").run(error);
+}
+
+export function savePublicUrl(publicUrl: string | null) {
+  db.prepare("UPDATE local_state SET publicUrl = ? WHERE id = 1").run(publicUrl);
 }
 
 export default db;

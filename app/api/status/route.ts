@@ -11,5 +11,6 @@ export async function GET() {
     truenasApiUrl: state.truenasApiUrl,
     truenasError: state.truenasError,
     truenasBackupData: state.truenasBackupData ? JSON.parse(state.truenasBackupData) : null,
+    publicUrl: state.publicUrl,
   });
 }

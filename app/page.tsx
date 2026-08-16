@@ -19,6 +19,7 @@ import {
   LayoutDashboard,
   Boxes,
   Languages,
+  Globe,
 } from "lucide-react";
 import type { HostSnapshot } from "@/lib/docker";
 import type { DiskFailureResult } from "@/lib/simulate";
@@ -100,6 +101,7 @@ type Status = {
   truenasConfigured: boolean;
   truenasApiUrl: string | null;
   truenasError: string | null;
+  publicUrl: string | null;
 };
 
 function backupBadge(locale: Locale, status: DiskBackupInfo["status"] | undefined) {
@@ -146,6 +148,9 @@ export default function Home() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
 
+  const [publicUrl, setPublicUrl] = useState("");
+  const [savingPublicUrl, setSavingPublicUrl] = useState(false);
+
   const [externalBackups, setExternalBackups] = useState<ExternalBackupWithFreshness[]>([]);
   const [showAddExternalBackup, setShowAddExternalBackup] = useState(false);
   const [ebName, setEbName] = useState("");
@@ -177,6 +182,7 @@ export default function Home() {
     const data = await res.json();
     setStatus(data);
     setTruenasApiUrl(data.truenasApiUrl ?? "");
+    setPublicUrl(data.publicUrl ?? "");
     setStatusLoading(false);
   }
 
@@ -266,6 +272,21 @@ export default function Home() {
     }
     setTruenasApiKey("");
     await loadStatus();
+  }
+
+  async function handleSavePublicUrl(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingPublicUrl(true);
+    const res = await fetch("/api/app-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicUrl }),
+    });
+    setSavingPublicUrl(false);
+    if (res.ok) {
+      const body = await res.json();
+      setPublicUrl(body.publicUrl ?? "");
+    }
   }
 
   async function handleAddExternalBackup(e: React.FormEvent) {
@@ -373,11 +394,24 @@ export default function Home() {
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
       <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-surface-2">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand text-white">
-            <Skull size={16} />
+        <div className="flex flex-col gap-1 border-b border-border px-4 py-3.5">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand text-white">
+              <Skull size={16} />
+            </div>
+            <span className="text-sm font-semibold leading-tight">{T("app.title")}</span>
           </div>
-          <span className="text-sm font-semibold leading-tight">{T("app.title")}</span>
+          {status?.publicUrl && (
+            <a
+              href={status.publicUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 pl-10 text-xs text-muted hover:text-brand"
+            >
+              <Globe size={11} />
+              {status.publicUrl.replace(/^https?:\/\//, "")}
+            </a>
+          )}
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 p-2">
           {NAV_ITEMS.map((item) => {
@@ -1034,7 +1068,33 @@ export default function Home() {
               )}
 
               {activeSection === "settings" && (
-                <section>
+                <section className="flex flex-col gap-4">
+                  <form onSubmit={handleSavePublicUrl} className="rounded-md border border-border bg-surface p-4 shadow-sm">
+                    <h2 className="flex items-center gap-2 text-sm font-semibold mb-1">
+                      <Globe size={16} />
+                      {T("settings.addressTitle")}
+                    </h2>
+                    <p className="text-sm text-muted mb-2.5">{T("settings.addressDescription")}</p>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium">{T("settings.address")}</span>
+                      <input
+                        value={publicUrl}
+                        onChange={(e) => setPublicUrl(e.target.value)}
+                        placeholder="hds.matu.tr"
+                        className="rounded-md border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+                      />
+                    </label>
+                    <div className="mt-4 flex items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={savingPublicUrl}
+                        className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-50"
+                      >
+                        {T("settings.save")}
+                      </button>
+                    </div>
+                  </form>
+
                   <form onSubmit={handleSaveSettings} className="rounded-md border border-border bg-surface p-4 shadow-sm">
                     <h2 className="flex items-center gap-2 text-sm font-semibold mb-1">
                       <DatabaseBackup size={16} />
