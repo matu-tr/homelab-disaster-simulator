@@ -401,23 +401,7 @@ export default function Home() {
               <Skull size={16} />
             </div>
             <span className="text-sm font-semibold leading-tight">{T("app.title")}</span>
-            {status?.version && (
-              <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
-                v{status.version}
-              </span>
-            )}
           </div>
-          {status?.publicUrl && (
-            <a
-              href={status.publicUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 pl-10 text-xs text-muted hover:text-brand"
-            >
-              <Globe size={11} />
-              {status.publicUrl.replace(/^https?:\/\//, "")}
-            </a>
-          )}
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 p-2">
           {NAV_ITEMS.map((item) => {
@@ -440,6 +424,9 @@ export default function Home() {
           })}
         </nav>
         <div className="border-t border-border p-2">
+          {status?.version && (
+            <div className="pb-2 text-center text-[11px] text-muted">v{status.version}</div>
+          )}
           <div className="flex items-center gap-1 rounded-md bg-background p-1 text-xs">
             <Languages size={13} className="ml-1 text-muted" />
             {(["tr", "en"] as Locale[]).map((l) => (
