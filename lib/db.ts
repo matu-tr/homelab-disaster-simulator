@@ -7,8 +7,9 @@ fs.mkdirSync(dataDir, { recursive: true });
 
 const db = new Database(path.join(dataDir, "homelab-disaster-sim.db"));
 db.pragma("journal_mode = WAL");
-
-db.exec("DROP TABLE IF EXISTS hosts");
+// next build eşzamanlı olarak birden fazla worker'da bu modülü import edip aynı dosyayı açabiliyor —
+// busy_timeout olmadan bu SQLITE_BUSY ile anında patlar; bunun yerine kilidin açılmasını bekler.
+db.pragma("busy_timeout = 5000");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS local_state (
