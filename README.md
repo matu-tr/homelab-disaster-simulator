@@ -34,13 +34,46 @@ Opens at `http://localhost:3000`. Use the `DOCKER_SOCKET` env variable to point 
 
 ## Self-host (Docker)
 
+### Option A — pull the published image (fastest)
+
+Every [release](https://github.com/matu-tr/homelab-disaster-simulator/releases) publishes a multi-arch image to GHCR. Create a `docker-compose.yml`:
+
+```yaml
+services:
+  app:
+    image: ghcr.io/matu-tr/homelab-disaster-simulator:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - sim-data:/app/data
+      # Required for the app to watch the host's Docker.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Optional — needed for the External Backup Jobs feature (marker file reads).
+      # Mount the host path where marker files live at the SAME path inside the container.
+      - /mnt:/mnt:ro
+    environment:
+      - DATA_DIR=/app/data
+    restart: unless-stopped
+
+volumes:
+  sim-data:
+```
+
 ```bash
+docker compose up -d
+```
+
+### Option B — build from source
+
+```bash
+git clone git@github.com:matu-tr/homelab-disaster-simulator.git
+cd homelab-disaster-simulator
 docker compose up -d --build
 ```
 
-`docker-compose.yml` mounts the host's Docker socket into the container read-only — this is required for the app to work, only run it in environments you trust.
+Both options mount the host's Docker socket into the container read-only — this is required for the app to work, only run it in environments you trust.
 
-For the app to read external backup jobs' marker files, the host path where those files live (e.g. `/mnt`) must also be mounted into the container read-only at the **same path** — this is already enabled by default in `docker-compose.yml`. Whatever absolute path the marker file is at on the host, enter that same absolute path when registering the job (not the path inside the container).
+For the app to read external backup jobs' marker files, the host path where those files live (e.g. `/mnt`) must also be mounted into the container read-only at the **same path**. Whatever absolute path the marker file is at on the host, enter that same absolute path when registering the job (not the path inside the container).
 
 ## Limitations (deliberate MVP decisions)
 
