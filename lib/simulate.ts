@@ -17,8 +17,8 @@ function pathGroupKey(sourcePath: string, depth: number): string {
 }
 
 /**
- * Konteynerlerin gerçek bind mount'larından, kullanıcıdan hiçbir giriş almadan
- * olası "disk" sınırlarını (ör. /mnt/<pool>/<dataset>) çıkarır.
+ * Derives likely "disk" boundaries (e.g. /mnt/<pool>/<dataset>) from the containers'
+ * real bind mounts, without asking the user for any input.
  */
 export function detectDiskGroups(snapshot: HostSnapshot, depth = 3): DiskFailureResult[] {
   const groups = new Map<string, Map<string, AffectedContainer>>();
@@ -26,9 +26,9 @@ export function detectDiskGroups(snapshot: HostSnapshot, depth = 3): DiskFailure
   for (const container of snapshot.containers) {
     const byPrefix = new Map<string, Set<string>>();
     for (const mount of container.mounts ?? []) {
-      // Uygulamanın kendi altyapı mount'ları (Docker socket'i izlemek ve harici backup marker
-      // dosyalarını okumak için) gerçek bir "disk/dataset" sınırı değil — disk senaryolarına
-      // gürültü olarak karışmasın diye atlanıyor.
+      // The app's own infra mounts (watching the Docker socket and reading external backup
+      // marker files) are not real "disk/dataset" boundaries — skipped so they don't show up
+      // as noise in the disk scenarios.
       if (mount.source === "/var/run/docker.sock" || mount.source === "/mnt") continue;
       const prefix = pathGroupKey(mount.source, depth);
       if (!byPrefix.has(prefix)) byPrefix.set(prefix, new Set());

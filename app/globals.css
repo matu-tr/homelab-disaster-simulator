@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Cockpit/TrueNAS tarzı koyu, teknik panel görünümü — sabit varsayılan (sistem temasından bağımsız). */
+/* Cockpit/TrueNAS-style dark, technical panel look — a fixed default (independent of the system theme). */
 :root {
   --background: #0b0c0f;
   --surface: #16181d;

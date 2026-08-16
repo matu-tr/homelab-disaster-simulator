@@ -13,7 +13,7 @@ export async function POST() {
       const backupData = await collectTrueNasBackupData(state.truenasApiUrl, state.truenasApiKey);
       saveTrueNasBackupData(JSON.stringify(backupData));
     } catch (err) {
-      saveTrueNasError(err instanceof Error ? err.message : "TrueNAS API hatası");
+      saveTrueNasError(err instanceof Error ? err.message : "TrueNAS API error");
     }
   }
 
@@ -22,7 +22,7 @@ export async function POST() {
     saveSnapshot(JSON.stringify(snapshot));
     return NextResponse.json({ ok: true, snapshot });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Bilinmeyen hata";
+    const message = err instanceof Error ? err.message : "Unknown error";
     saveError(message);
     return NextResponse.json({ error: message }, { status: 502 });
   }

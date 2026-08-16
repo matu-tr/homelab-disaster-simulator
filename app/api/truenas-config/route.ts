@@ -7,10 +7,10 @@ export async function POST(req: NextRequest) {
   const apiKey = String(body.apiKey || "").trim() || null;
 
   if ((apiUrl && !apiKey) || (!apiUrl && apiKey)) {
-    return NextResponse.json({ error: "API adresi ve key birlikte girilmeli." }, { status: 400 });
+    return NextResponse.json({ error: "The API address and key must be provided together." }, { status: 400 });
   }
   if (apiUrl && !apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
-    return NextResponse.json({ error: "API adresi http:// veya https:// ile başlamalı." }, { status: 400 });
+    return NextResponse.json({ error: "The API address must start with http:// or https://." }, { status: 400 });
   }
 
   saveTrueNasConfig(apiUrl, apiKey);

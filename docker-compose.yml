@@ -5,10 +5,10 @@ services:
       - "3000:3000"
     volumes:
       - sim-data:/app/data
-      # Kurulu olduğu makinenin Docker'ını izlemesi için gerekli.
+      # Required for the app to watch the host's Docker.
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Restic/Borg/rsync marker dosyalarını okuyabilmesi için (Harici Backup Job'ları özelliği).
-      # Marker dosyanın host'taki yolu, ana makinedeki gerçek yolla AYNI kalacak şekilde mount et.
+      # Needed to read Restic/Borg/rsync marker files (the External Backup Jobs feature).
+      # Mount the host path where marker files live at the SAME path inside the container.
       - /mnt:/mnt:ro
     environment:
       - DATA_DIR=/app/data

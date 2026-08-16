@@ -42,22 +42,22 @@ export type FullDatasetBackupInfo = DatasetBackupInfo & {
   mountpoint: string | null;
   usedBytes: number;
   affectedContainers: AffectedContainerRef[];
-  /** Kullanıcı bu dataset'i Recovery Score hesaplamasından bilinçli olarak çıkardı mı (ör. TimeMachine — zaten bir yedek). */
+  /** Did the user deliberately exclude this dataset from the Recovery Score (e.g. TimeMachine — already a backup). */
   excluded: boolean;
 };
 
 export type PhysicalDiskWithImpact = PhysicalDisk & {
-  /** Diskteki TÜM verinin toplamı (hariç tutulan dataset'ler dahil) — "bu disk çökerse kaç GB kaybedilir" için. */
+  /** Total of ALL data on the disk (excluded datasets included) — for "how many GB are lost if this disk dies". */
   totalBytes: number;
-  /** Hesaplamaya dahil edilen (hariç tutulmamış) verinin toplamı — korunma oranının paydası. */
+  /** Total of the data included in the calculation (not excluded) — the denominator of the protection ratio. */
   scorableBytes: number;
-  /** scorableBytes içindeki korunan kısım — korunma oranının payı. */
+  /** The protected share of scorableBytes — the numerator of the protection ratio. */
   protectedBytes: number;
   affectedContainers: AffectedContainerRef[];
   datasets: FullDatasetBackupInfo[];
-  /** Bu disk, başka hangi pool'ların replikasyon HEDEFİ olarak kullanılıyor (bu diskin kendisi bir yedek). */
+  /** Which other pools use this disk as a replication TARGET (i.e. this disk is itself a backup). */
   backupTargetForPools: string[];
-  /** Kullanıcı bu disk/pool'u Recovery Score hesaplamasından bilinçli olarak çıkardı mı. */
+  /** Did the user deliberately exclude this disk/pool from the Recovery Score calculation. */
   excluded: boolean;
 };
 
@@ -73,7 +73,7 @@ function datasetCoversPath(taskDataset: string, recursive: boolean, targetDatase
   return false;
 }
 
-/** path, prefix'in kendisi veya bir alt yolu mu? (ör. "/mnt/media/Movies" prefix "/mnt/media" ile eşleşir) */
+/** Is path the prefix itself or a path below it? (e.g. "/mnt/media/Movies" matches prefix "/mnt/media") */
 function pathMatchesPrefix(path: string, prefix: string): boolean {
   const normalized = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
   return path === normalized || path.startsWith(`${normalized}/`);
@@ -93,7 +93,7 @@ function findExternalCoverage(path: string | null, jobs: ExternalBackupWithFresh
   };
 }
 
-/** TrueNAS Cloud Sync Task'ları (S3/Google Drive/B2/...) yolu üzerinden eşleştirir. */
+/** Matches TrueNAS Cloud Sync Tasks (S3/Google Drive/B2/...) by path. */
 function findCloudSyncCoverage(path: string | null, tasks: CloudSyncTask[]): CloudSyncCoverage | null {
   if (!path) return null;
   const task = tasks.find(
@@ -138,11 +138,12 @@ function matchBackup(
     status = "snapshot-only";
   }
 
-  // Aktif bir Cloud Sync (S3/Google Drive/...) push'u, ZFS replikasyonundan bile daha güvenilir bir
-  // off-site kopya sayılır. "status !== replicated" şartıyla sınırlamıyoruz: ZFS replikasyonu zaten
-  // aynı fiziksel makinede (LOCAL transport) status'u "replicated" yapmış olsa bile, dataset AYRICA
-  // Cloud Sync ile de kapsanıyorsa gerçek off-site koruması var demektir — sameHostOnly'yi bu durumda
-  // da temizlememek "hem ZFS hem Cloud Sync var ama hâlâ tek makinedeyiz" gibi yanlış bir uyarı üretirdi.
+  // An active Cloud Sync (S3/Google Drive/...) push counts as an off-site copy that is even more
+  // reliable than ZFS replication. We deliberately don't gate this on "status !== replicated": even
+  // if ZFS replication on the same physical machine (LOCAL transport) already set the status to
+  // "replicated", a dataset ALSO covered by Cloud Sync does have genuine off-site protection — not
+  // clearing sameHostOnly here would produce the bogus warning "both ZFS and Cloud Sync exist, but
+  // we're still on a single machine".
   if (cloudSync?.active) {
     status = "replicated";
     sameHostOnly = false;
@@ -151,12 +152,12 @@ function matchBackup(
   return { dataset, status, matchedSnapshotTask, matchedReplicationTask, sameHostOnly, cloudSync };
 }
 
-/** "/mnt/pool1/Databases" -> "pool1/Databases" (ZFS dataset adı) */
+/** "/mnt/pool1/Databases" -> "pool1/Databases" (the ZFS dataset name) */
 function pathToDataset(pathPrefix: string): string {
   return pathPrefix.replace(/^\/mnt\//, "");
 }
 
-/** Docker konteynerlerinin bind mount'larından türetilen disk gruplarının backup durumu. */
+/** Backup status of the disk groups derived from the Docker containers' bind mounts. */
 export function computeBackupStatus(
   diskGroups: DiskFailureResult[],
   backupData: TrueNasBackupData[],
@@ -165,10 +166,10 @@ export function computeBackupStatus(
   const snapshotTasks = backupData.flatMap((d) => d.snapshotTasks).filter((t) => t.enabled);
   const replicationTasks = backupData.flatMap((d) => d.replicationTasks).filter((t) => t.enabled);
   const cloudSyncTasks = backupData.flatMap((d) => d.cloudSyncTasks ?? []);
-  // "/mnt/<pool>/<dataset>" -> "<pool>/<dataset>" çevirisi ix-apps için yanlış: TrueNAS onu her zaman
-  // sabit "/mnt/.ix-apps/app_mounts" yoluna mount eder, gerçek ZFS adı ise "<pool>/ix-apps" gibi farklı
-  // bir şeydir (ör. "pool2/ix-apps"). Path'ten isim üretmek yerine, mümkünse gerçek dataset
-  // listesinden mountpoint eşleşmesiyle doğru ZFS adını buluyoruz.
+  // The "/mnt/<pool>/<dataset>" -> "<pool>/<dataset>" translation is wrong for ix-apps: TrueNAS
+  // always mounts it at the fixed path "/mnt/.ix-apps/app_mounts", while its real ZFS name is
+  // something else like "<pool>/ix-apps" (e.g. "pool2/ix-apps"). Instead of deriving the name from
+  // the path, we find the correct ZFS name by matching mountpoints against the real dataset list.
   const datasetNameByMountpoint = new Map(
     backupData.flatMap((d) => d.datasets).map((ds) => [ds.mountpoint, ds.name] as const)
   );
@@ -188,15 +189,15 @@ function findAffectedContainers(mountpoint: string | null, containers: Container
   return containers
     .filter((c) =>
       (c.mounts ?? []).some(
-        // Konteyner dataset'in kendisini VEYA onu kapsayan bir üst dizini mount etmiş olabilir (ör. "/mnt/pool3"
-        // konteyneri, "/mnt/pool3/Media" dataset'ini de örtük olarak kapsar).
+        // A container may mount the dataset itself OR a parent directory containing it (e.g. a
+        // container on "/mnt/pool3" implicitly covers the "/mnt/pool3/Media" dataset too).
         (m) => pathMatchesPrefix(m.source, mountpoint) || pathMatchesPrefix(mountpoint, m.source)
       )
     )
     .map((c) => ({ id: c.id, name: c.name }));
 }
 
-/** Konteyner kullanımından bağımsız, TrueNAS'taki TÜM dataset'lerin backup durumu. */
+/** Backup status of ALL datasets on TrueNAS, regardless of container usage. */
 export function computeDatasetBackupStatus(
   datasets: Dataset[],
   backupData: TrueNasBackupData[],
@@ -220,9 +221,9 @@ export function computeDatasetBackupStatus(
 }
 
 /**
- * Her fiziksel diski, bağlı olduğu pool'un TÜM dataset'leriyle ilişkilendirir. ZFS bir pool içindeki
- * redundansız (stripe) vdev'lerin verisini tüm disklere yayar — yani o disklerden biri bile kaybedilse
- * pool'un TÜMÜ (ve dolayısıyla tüm dataset'leri) risk altındadır.
+ * Associates each physical disk with ALL datasets of the pool it belongs to. ZFS spreads the data of
+ * a pool's non-redundant (stripe) vdevs across every disk — so losing even one of those disks puts
+ * the ENTIRE pool (and therefore all of its datasets) at risk.
  */
 export function computeDiskImpact(
   physicalDisks: PhysicalDisk[],
@@ -250,17 +251,18 @@ export function computeDiskImpact(
   return physicalDisks
     .map((disk) => {
       const poolDatasets = (disk.pool ? datasetsByPool.get(disk.pool) : undefined) ?? [];
-      // Boot/OS diskinin normal ZFS dataset'leri (dolayısıyla backup task'ları) yok — bilinen bir
-      // koruma mekanizması takip etmiyoruz, bu yüzden boyutunu kendi disk kaydından alıp %0 korunuyor
-      // olarak dürüstçe gösteriyoruz (yanlışlıkla "%100 korunuyor" görünmesin diye).
+      // The boot/OS disk has no normal ZFS datasets (and therefore no backup tasks) — we don't track
+      // any known protection mechanism for it, so we take its size from its own disk record and
+      // honestly report it as 0% protected (rather than having it look "100% protected" by accident).
       const totalBytes =
         poolDatasets.length > 0 ? poolDatasets.reduce((sum, d) => sum + d.usedBytes, 0) : (disk.sizeBytes ?? 0);
       const scorableDatasets = poolDatasets.filter((d) => !d.excluded);
       const scorableBytes =
         poolDatasets.length > 0 ? scorableDatasets.reduce((sum, d) => sum + d.usedBytes, 0) : totalBytes;
-      // "Sadece snapshot" aynı disk/pool üzerinde durur — disk çökerse snapshot da gider, gerçek koruma
-      // sağlamaz (bkz. README). Disk-ölümüne karşı korumada yalnızca "replicated" (farklı pool/off-site)
-      // veya taze harici backup sayılmalı; snapshot-only'yi "korunuyor" saymak skoru yanıltıcı şekilde şişirir.
+      // "Snapshot only" lives on the same disk/pool — if the disk dies the snapshot goes with it, so
+      // it is not real protection (see README). Against disk death only "replicated" (different
+      // pool/off-site) or a fresh external backup should count; counting snapshot-only as "protected"
+      // would inflate the score misleadingly.
       const protectedBytes = scorableDatasets
         .filter((d) => d.status === "replicated" || d.externalBackup?.status === "fresh")
         .reduce((sum, d) => sum + d.usedBytes, 0);

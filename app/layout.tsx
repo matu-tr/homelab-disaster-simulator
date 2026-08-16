@@ -29,7 +29,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "HomeLab Disaster Simulator",
-  description: "Bir node ölürse hayatta kalanlar konteynerleri kaldırabilir mi? Gerçek RAM/CPU kullanımına göre simüle et.",
+  description: "If a disk dies, can you recover? Simulate it from real mount and backup data.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

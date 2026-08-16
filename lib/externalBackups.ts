@@ -10,17 +10,17 @@ export type ExternalBackupFreshness = {
   error: string | null;
 };
 
-/** Marker dosyanın son değiştirilme zamanına bakarak backup job'ının tazeliğini değerlendirir. */
+/** Judges a backup job's freshness from the marker file's last-modified time. */
 export function checkFreshness(markerPath: string, expectedIntervalHours: number): ExternalBackupFreshness {
   try {
     const stat = fs.statSync(markerPath);
     const ageMs = Date.now() - stat.mtime.getTime();
     const ageHours = ageMs / (1000 * 60 * 60);
-    // Zamanlamada kaçırılan bir çalıştırmayı hemen "bayat" saymamak için %50 tolerans payı.
+    // 50% tolerance so a single missed run in the schedule is not immediately called "stale".
     const status: FreshnessStatus = ageHours <= expectedIntervalHours * 1.5 ? "fresh" : "stale";
     return { status, lastModified: stat.mtime.toISOString(), ageHours, error: null };
   } catch {
-    return { status: "missing", lastModified: null, ageHours: null, error: "Marker dosya bulunamadı veya okunamadı." };
+    return { status: "missing", lastModified: null, ageHours: null, error: "Marker file not found or unreadable." };
   }
 }
 

@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const excluded = Boolean(body.excluded);
 
   if (!dataset) {
-    return NextResponse.json({ error: "Dataset adı zorunludur." }, { status: 400 });
+    return NextResponse.json({ error: "Dataset name is required." }, { status: 400 });
   }
 
   if (excluded) {

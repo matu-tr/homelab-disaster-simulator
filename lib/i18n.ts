@@ -1,6 +1,6 @@
 export type Locale = "tr" | "en";
 
-/** Skor/backup motorlarının ürettiği, henüz bir dile biçimlendirilmemiş yapılandırılmış mesaj. */
+/** A structured message produced by the score/backup engines, not yet rendered into a language. */
 export type Msg = { key: string; params?: Record<string, string | number> };
 
 export function msg(key: string, params?: Record<string, string | number>): Msg {

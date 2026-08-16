@@ -70,7 +70,7 @@ function computeDiskConcentration(
   };
 }
 
-/** Dataset backup durumlarını, konteynerlerin kullanıp kullanmadığına bakmaksızın TÜM verinin (byte) üzerinden değerlendirir. */
+/** Evaluates dataset backup states over ALL data (bytes), regardless of whether containers use it. */
 function computeSnapshotCoverage(
   datasetBackups: FullDatasetBackupInfo[]
 ): { item: ScoreBreakdownItem; issues: CriticalIssue[] } {
@@ -172,8 +172,9 @@ function computeReplicationIndependence(
 }
 
 /**
- * TrueNAS replikasyonu ile zaten bağımsız korunmayan veriler için, harici backup job'larının
- * (restic/borg/rsync — marker dosya tazeliğiyle doğrulanan) ek bir güvenlik ağı olup olmadığını ölçer.
+ * For data that is not already independently protected by TrueNAS replication, measures whether
+ * external backup jobs (restic/borg/rsync — verified via marker file freshness) provide an
+ * additional safety net.
  */
 function computeExternalBackupFreshness(
   datasetBackups: FullDatasetBackupInfo[],
@@ -266,7 +267,7 @@ export function computeRecoveryScore(
   ];
 
   const breakdown = parts.map((p) => p.item);
-  // En büyük etkiye sahip (veri hacmi büyük) sorunlar önce, aynı hacimde kritik olanlar uyarılardan önce.
+  // Highest-impact problems (large data volume) first; at equal volume, critical ones before warnings.
   const issues = parts.flatMap((p) => p.issues).sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "critical" ? -1 : 1));
   const total = breakdown.reduce((sum, b) => sum + b.score, 0);
   const maxTotal = breakdown.reduce((sum, b) => sum + b.max, 0);

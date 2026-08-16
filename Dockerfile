@@ -23,7 +23,7 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/next.config.ts ./next.config.ts
 COPY --from=build /app/lib ./lib
-# AGPL: lisans metni dağıtılan imajla birlikte gelmeli.
+# AGPL: the license text must ship with the distributed image.
 COPY --from=build /app/LICENSE ./LICENSE
 RUN mkdir -p /app/data
 EXPOSE 3000

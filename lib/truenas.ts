@@ -36,9 +36,9 @@ export type PhysicalDisk = {
   serial: string | null;
   pool: string | null;
   vdevType: string | null;
-  /** true = mirror/raidz üyesi (tek disk kaybı veri kaybettirmez, sadece degrade eder). false = redundancy yok. */
+  /** true = mirror/raidz member (losing one disk degrades the array without losing data). false = no redundancy. */
   redundant: boolean;
-  /** true = TrueNAS'ın kendi işletim sistemi/boot diski (data pool'ları değil, sistemin kendisi). */
+  /** true = TrueNAS's own OS/boot disk (the system itself, not one of the data pools). */
   isBootDisk: boolean;
 };
 
@@ -104,10 +104,10 @@ function flattenDatasets(nodes: RawDataset[]): Dataset[] {
           name: n.name,
           pool: n.pool,
           mountpoint: n.mountpoint,
-          // ZFS'in "used" alanı çocuk dataset'lerin ve snapshot'ların verisini de içerir (roll-up) —
-          // bir pool'daki tüm dataset'leri (ebeveyn + çocuklar) toplarken bunu kullanmak veriyi
-          // iki kere saydırır. "usedbydataset" sadece BU dataset'e özgü, çocuklara ait olmayan
-          // veriyi verir — pool-seviyesi toplamlar için doğru olan budur.
+          // ZFS's "used" field rolls up the data of child datasets and snapshots — using it while
+          // summing all datasets of a pool (parent + children) counts the same data twice.
+          // "usedbydataset" reports only the data specific to THIS dataset, excluding children —
+          // which is the correct figure for pool-level totals.
           usedBytes: n.usedbydataset?.parsed ?? 0,
         });
       }
@@ -145,7 +145,7 @@ function flattenPhysicalDisks(pools: RawPool[], disks: RawDisk[], isBootDisk = f
   for (const pool of pools) {
     for (const vdev of pool.topology.data ?? []) {
       if (vdev.type === "DISK" && vdev.disk) {
-        // Redundansız tekli disk vdev'i — bu diski kaybetmek pool'u (ve tüm dataset'lerini) kaybetmek demek.
+        // Single-disk vdev with no redundancy — losing this disk means losing the pool (and all its datasets).
         const meta = diskByName.get(vdev.disk);
         result.push({
           device: vdev.disk,
@@ -158,7 +158,7 @@ function flattenPhysicalDisks(pools: RawPool[], disks: RawDisk[], isBootDisk = f
           isBootDisk,
         });
       } else if (vdev.children?.length) {
-        // MIRROR / RAIDZ* — üye disklerden biri kaybedilse bile pool ayakta kalır (degrade).
+        // MIRROR / RAIDZ* — the pool survives (degraded) even if one member disk is lost.
         for (const child of vdev.children) {
           if (child.type !== "DISK" || !child.disk) continue;
           const meta = diskByName.get(child.disk);
@@ -194,16 +194,17 @@ export async function collectTrueNasBackupData(apiUrl: string, apiKey: string): 
 
   const datasets = flattenDatasets(rawDatasets as RawDataset[]);
 
-  // TrueNAS, uygulamaların iç yönetim dataset'ini (ix-apps) normal dataset listesinden bilerek gizler —
-  // hangi diskte olduğunu görebilmek için Docker servis konfigürasyonundan ayrıca çekiyoruz. Boyutu bu
-  // yoldan alınamıyor (0 olarak işaretlenir), sadece hangi pool'da olduğunu göstermek içindir.
+  // TrueNAS deliberately hides the apps' internal management dataset (ix-apps) from the normal
+  // dataset listing — we fetch it separately from the Docker service configuration so we can see
+  // which disk it lives on. Its size is not available this way (marked as 0); this exists purely
+  // to show which pool it is on.
   try {
     const rawDocker = (await truenasFetch(apiUrl, apiKey, "/api/v2.0/docker")) as {
       dataset?: string;
       pool?: string;
     };
     if (rawDocker.dataset && rawDocker.pool && !datasets.some((d) => d.name === rawDocker.dataset)) {
-      // TrueNAS SCALE, pool adından bağımsız olarak bu dataset'i her zaman /mnt/.ix-apps/app_mounts altında mount eder.
+      // TrueNAS SCALE always mounts this dataset under /mnt/.ix-apps/app_mounts, whatever the pool is named.
       datasets.push({
         name: rawDocker.dataset,
         pool: rawDocker.pool,
@@ -212,13 +213,14 @@ export async function collectTrueNasBackupData(apiUrl: string, apiKey: string): 
       });
     }
   } catch {
-    // Docker app servisi kurulu değilse veya endpoint yoksa sessizce atla — kritik bir veri değil.
+    // Silently skip if the Docker app service isn't installed or the endpoint is missing — not critical data.
   }
 
   const physicalDisks = [
     ...flattenPhysicalDisks(rawPools as RawPool[], rawDisks as RawDisk[]),
-    // Boot/OS diski `/api/v2.0/pool` listesinde YOKTUR — ayrı bir endpoint'ten gelir. Data pool'larından
-    // habersiz kalmaması için (sistemin kendisi de bir felaket senaryosudur) ayrıca ekliyoruz.
+    // The boot/OS disk is NOT in the `/api/v2.0/pool` listing — it comes from a separate endpoint.
+    // We add it explicitly so it isn't missed alongside the data pools (the system itself is a
+    // disaster scenario too).
     ...flattenPhysicalDisks([rawBootState as RawPool], rawDisks as RawDisk[], true),
   ];
 
@@ -264,9 +266,9 @@ export async function collectTrueNasBackupData(apiUrl: string, apiKey: string): 
     lastSnapshot: t.state?.last_snapshot ?? null,
   }));
 
-  // ÖNEMLİ: raw cloudsync yanıtı `credentials.provider.token` altında OAuth access/refresh token'larını
-  // düz metin içerir. Sadece aşağıdaki alanları çıkarıyoruz — token'a veya credentials objesinin
-  // tamamına ASLA dokunmuyoruz, hiçbir yerde saklamıyoruz.
+  // IMPORTANT: the raw cloudsync response contains OAuth access/refresh tokens in plain text under
+  // `credentials.provider.token`. We extract only the fields below — we NEVER touch the token or the
+  // credentials object as a whole, and never store them anywhere.
   type RawCloudSyncTask = {
     id: number;
     description: string;

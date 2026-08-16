@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const excluded = Boolean(body.excluded);
 
   if (!pool) {
-    return NextResponse.json({ error: "Pool adı zorunludur." }, { status: 400 });
+    return NextResponse.json({ error: "Pool name is required." }, { status: 400 });
   }
 
   if (excluded) {

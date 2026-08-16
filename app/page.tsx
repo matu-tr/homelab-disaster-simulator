@@ -31,11 +31,11 @@ import { t, tm, type Locale } from "@/lib/i18n";
 
 type DiskGroupWithBackup = DiskFailureResult & { backup: DiskBackupInfo | null };
 
-const TOOL_LABELS: Record<string, string> = { restic: "Restic", borg: "Borg", rsync: "rsync", other: "Diğer" };
+const TOOL_LABELS: Record<string, string> = { restic: "Restic", borg: "Borg", rsync: "rsync", other: "Other" };
 
 type Section = "overview" | "disks" | "backup" | "external" | "containers" | "settings";
 
-/** Skor oranına (0-1) göre renk sınıfları — sabit marka rengi yerine iyi/orta/kötü ayrımı gösterir. */
+/** Color classes by score ratio (0-1) — shows a good/medium/bad distinction instead of a fixed brand color. */
 function scoreColorClasses(ratio: number): { text: string; border: string; bar: string } {
   if (ratio >= 0.8) {
     return { text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-500/40", bar: "bg-emerald-500" };
@@ -70,7 +70,7 @@ const DISK_TAG_COLORS = [
   "bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300",
 ];
 
-/** Her disk/dataset ismine, isim sabit kaldığı sürece aynı kalan bir renk atar. */
+/** Assigns each disk/dataset name a color that stays the same as long as the name does. */
 function diskTagColor(disk: string): string {
   let hash = 0;
   for (let i = 0; i < disk.length; i++) hash = (hash * 31 + disk.charCodeAt(i)) | 0;
@@ -169,7 +169,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // <html lang> Türkçe kalırsa tarayıcı İngilizce metne bile Türkçe büyük-harf kuralını (I -> İ) uygular.
+    // If <html lang> stays Turkish, the browser applies the Turkish uppercase rule (I -> İ) even to English text.
     document.documentElement.lang = locale;
   }, [locale]);
 
@@ -250,7 +250,7 @@ export default function Home() {
     const res = await fetch("/api/refresh", { method: "POST" });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setRefreshError(body.error || "Bir hata oluştu.");
+      setRefreshError(body.error || "Something went wrong.");
     }
     await loadAll();
     setRefreshing(false);
@@ -268,7 +268,7 @@ export default function Home() {
     setSavingSettings(false);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setSettingsError(body.error || "Bir hata oluştu.");
+      setSettingsError(body.error || "Something went wrong.");
       return;
     }
     setTruenasApiKey("");
@@ -308,7 +308,7 @@ export default function Home() {
     setSavingEb(false);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setEbError(body.error || "Bir hata oluştu.");
+      setEbError(body.error || "Something went wrong.");
       return;
     }
     setEbName("");
@@ -320,7 +320,7 @@ export default function Home() {
   }
 
   async function handleDeleteExternalBackup(id: number) {
-    if (!confirm("Bu backup job'ını kaldırmak istediğine emin misin?")) return;
+    if (!confirm("Are you sure you want to remove this backup job?")) return;
     await fetch(`/api/external-backups/${id}`, { method: "DELETE" });
     await Promise.all([loadExternalBackups(), loadScore(), loadDiskGroups(), loadPhysicalDisks()]);
   }
@@ -347,8 +347,8 @@ export default function Home() {
   const T = (key: string, params?: Record<string, string | number>) => t(locale, key, params);
   const activeNav = NAV_ITEMS.find((n) => n.id === activeSection)!;
 
-  // Bir pool birden fazla fiziksel diske stripe edilmiş olabilir (ör. pool3) — o yüzden
-  // pool başına birden fazla fiziksel disk (gerçek aygıt/model) olabilir.
+  // A pool may be striped across several physical disks (e.g. pool3) — so a single pool can map
+  // to more than one physical disk (the real device/model).
   const disksByPool = new Map<string, { device: string; model: string | null }[]>();
   for (const pd of physicalDisks) {
     if (!pd.pool) continue;
@@ -357,9 +357,10 @@ export default function Home() {
     disksByPool.set(pd.pool, list);
   }
 
-  // "/mnt/<pool>/<dataset>" -> pool/dataset varsayımı ix-apps için yanlış: TrueNAS onu her zaman sabit
-  // "/mnt/.ix-apps/app_mounts" yoluna mount eder, gerçek pool farklıdır (ör. "pool2"). Gerçek
-  // dataset listesinden mountpoint eşleşmesiyle doğru pool/dataset adını buluyoruz, bulamazsak path'ten tahmin ediyoruz.
+  // The "/mnt/<pool>/<dataset>" -> pool/dataset assumption is wrong for ix-apps: TrueNAS always
+  // mounts it at the fixed path "/mnt/.ix-apps/app_mounts" while the real pool is a different one
+  // (e.g. "pool2"). We find the correct pool/dataset name by matching mountpoints against the real
+  // dataset list, and fall back to guessing from the path.
   const poolByMountpoint = new Map<string, { pool: string; name: string }>();
   for (const pd of physicalDisks) {
     for (const ds of pd.datasets) {
@@ -367,9 +368,10 @@ export default function Home() {
     }
   }
 
-  // Konteynerler listesinde hangi disk grubuna (Disk Senaryoları'ndaki aynı pathPrefix) bağlı olduğunu
-  // göstermek için — bir konteyner birden fazla disk grubunda görünebilir (ör. hem app hem media diski).
-  // "pool" ZFS pool adı (Fiziksel Disk sütununda gerçek aygıta çevrilir), "dataset" tam ZFS dataset adı.
+  // Used to show, in the containers list, which disk group (the same pathPrefix as in Disk Scenarios)
+  // a container is attached to — a container can appear in several disk groups (e.g. both the app and
+  // the media disk). "pool" is the ZFS pool name (resolved to the real device in the Physical Disk
+  // column), "dataset" is the full ZFS dataset name.
   const disksByContainer = new Map<string, { pool: string; dataset: string | null }[]>();
   for (const g of diskGroups) {
     const known = poolByMountpoint.get(g.pathPrefix);
@@ -427,7 +429,7 @@ export default function Home() {
           {status?.version && (
             <div className="pb-2 text-center text-[11px] text-muted">v{status.version}</div>
           )}
-          {/* AGPL-3.0 §13: ağ üzerinden kullananlara kaynak kodu erişimi sunulmalı. */}
+          {/* AGPL-3.0 §13: network users must be offered access to the source code. */}
           <div className="pb-2 text-center text-[11px] text-muted">
             AGPL-3.0 ·{" "}
             <a

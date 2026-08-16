@@ -7,12 +7,11 @@ fs.mkdirSync(dataDir, { recursive: true });
 
 const db = new Database(path.join(dataDir, "homelab-disaster-sim.db"));
 
-// `next build` bu modülü şema kurulumu bittiğini beklemeden birden fazla worker'da eşzamanlı
-// import edebiliyor (sadece route export'larını incelemek için) — busy_timeout pragma'sı
-// journal_mode=WAL gibi mod değiştiren pragma'ları kapsamıyor (better-sqlite3 bunları hemen
-// SQLITE_BUSY ile reddediyor, retry etmiyor). Bu sadece build-time'a özgü bir yarış durumu
-// (tek process'te çalışan gerçek runtime'da hiç yaşanmıyor); kilitli olduğunda kısa süre
-// blocking-sleep ile bekleyip tekrar deniyoruz.
+// `next build` can import this module concurrently from several workers (just to inspect the
+// route exports) without waiting for the schema setup to finish — and the busy_timeout pragma
+// does not cover mode-changing pragmas like journal_mode=WAL (better-sqlite3 rejects those with
+// SQLITE_BUSY right away instead of retrying). This is a build-time-only race (it never happens
+// at real runtime, which is a single process); when locked we block-sleep briefly and retry.
 function retryOnBusy<T>(fn: () => T, maxAttempts = 50): T {
   for (let attempt = 1; ; attempt++) {
     try {
@@ -53,17 +52,17 @@ try {
   if ((err as { code?: string })?.code !== "SQLITE_BUSY") throw err;
 }
 
-// publicUrl sonradan eklendi — var olan kurulumlarda kolon olmayabilir. "Kolon var mı" kontrolü ile
-// asıl ALTER TABLE arasında başka bir worker'ın araya girip aynı kolonu eklemiş olması mümkün
-// (build-time'a özgü yarış) — "duplicate column" dahil buradaki her hatayı yutuyoruz, önemli olan
-// tek gerçek runtime process'inde kolonun sonunda var olması.
+// publicUrl was added later — existing installs may not have the column. Between the "does the
+// column exist" check and the actual ALTER TABLE, another worker may have slipped in and added
+// the same column (the build-time race) — so we swallow every error here, "duplicate column"
+// included; all that matters is the column existing in the one real runtime process.
 try {
   const localStateColumns = db.prepare("PRAGMA table_info(local_state)").all() as { name: string }[];
   if (!localStateColumns.some((c) => c.name === "publicUrl")) {
     db.exec("ALTER TABLE local_state ADD COLUMN publicUrl TEXT");
   }
 } catch {
-  // yut — bkz. üstteki açıklama
+  // swallow — see the comment above
 }
 
 safeSchemaExec(`
