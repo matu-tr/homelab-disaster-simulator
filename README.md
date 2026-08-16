@@ -82,3 +82,13 @@ For the app to read external backup jobs' marker files, the host path where thos
 - CPU usage is based on a point-in-time `docker stats` sample; no continuous monitoring or historical graphs.
 - External backup verification only checks marker file freshness — it doesn't verify that the job actually completed successfully or that the backup is intact (this corresponds to the doc's "restore test" goal, not yet implemented).
 - Never actually stops/moves/restores anything — it's purely an "on-paper" calculator.
+
+## License
+
+Copyright (C) 2026 matu-tr
+
+This program is free software: you can redistribute it and/or modify it under the terms of the **GNU Affero General Public License, version 3** as published by the Free Software Foundation. See [LICENSE](LICENSE) for the full text.
+
+The program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Because this is a web application, AGPL section 13 applies: if you run a modified version and let others use it over a network, you must offer those users the source code of your modified version. The app's sidebar therefore links to the source repository — keep that link (pointed at your own fork if you modify it).

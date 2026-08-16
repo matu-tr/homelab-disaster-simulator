@@ -2,6 +2,11 @@
   "name": "homelab-disaster-sim",
   "version": "1.3.2",
   "private": true,
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/matu-tr/homelab-disaster-simulator.git"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

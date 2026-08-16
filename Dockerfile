@@ -12,6 +12,9 @@ COPY . .
 RUN npm run build
 
 FROM base AS runner
+LABEL org.opencontainers.image.title="HomeLab Disaster Simulator" \
+      org.opencontainers.image.source="https://github.com/matu-tr/homelab-disaster-simulator" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV NODE_ENV=production
 ENV DATA_DIR=/app/data
 COPY --from=build /app/node_modules ./node_modules
@@ -20,6 +23,8 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/next.config.ts ./next.config.ts
 COPY --from=build /app/lib ./lib
+# AGPL: lisans metni dağıtılan imajla birlikte gelmeli.
+COPY --from=build /app/LICENSE ./LICENSE
 RUN mkdir -p /app/data
 EXPOSE 3000
 CMD ["npm", "start"]

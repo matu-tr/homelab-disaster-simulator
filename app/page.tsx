@@ -427,6 +427,18 @@ export default function Home() {
           {status?.version && (
             <div className="pb-2 text-center text-[11px] text-muted">v{status.version}</div>
           )}
+          {/* AGPL-3.0 §13: ağ üzerinden kullananlara kaynak kodu erişimi sunulmalı. */}
+          <div className="pb-2 text-center text-[11px] text-muted">
+            AGPL-3.0 ·{" "}
+            <a
+              href="https://github.com/matu-tr/homelab-disaster-simulator"
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-foreground"
+            >
+              {T("app.sourceCode")}
+            </a>
+          </div>
           <div className="flex items-center gap-1 rounded-md bg-background p-1 text-xs">
             <Languages size={13} className="ml-1 text-muted" />
             {(["tr", "en"] as Locale[]).map((l) => (

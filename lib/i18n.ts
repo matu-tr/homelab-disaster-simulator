@@ -13,6 +13,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "app.lastUpdate": "Son güncelleme: {{time}}",
     "app.neverUpdated": "Henüz veri çekilmedi",
     "app.loading": "Yükleniyor...",
+    "app.sourceCode": "Kaynak kodu",
 
     "nav.overview": "Genel Bakış",
     "nav.diskScenarios": "Disk Senaryoları",
@@ -147,6 +148,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "app.lastUpdate": "Last updated: {{time}}",
     "app.neverUpdated": "No data fetched yet",
     "app.loading": "Loading...",
+    "app.sourceCode": "Source code",
 
     "nav.overview": "Overview",
     "nav.diskScenarios": "Disk Scenarios",
