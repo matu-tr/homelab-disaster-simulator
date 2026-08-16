@@ -26,6 +26,10 @@ export function detectDiskGroups(snapshot: HostSnapshot, depth = 3): DiskFailure
   for (const container of snapshot.containers) {
     const byPrefix = new Map<string, Set<string>>();
     for (const mount of container.mounts ?? []) {
+      // Uygulamanın kendi altyapı mount'ları (Docker socket'i izlemek ve harici backup marker
+      // dosyalarını okumak için) gerçek bir "disk/dataset" sınırı değil — disk senaryolarına
+      // gürültü olarak karışmasın diye atlanıyor.
+      if (mount.source === "/var/run/docker.sock" || mount.source === "/mnt") continue;
       const prefix = pathGroupKey(mount.source, depth);
       if (!byPrefix.has(prefix)) byPrefix.set(prefix, new Set());
       byPrefix.get(prefix)!.add(mount.source);
