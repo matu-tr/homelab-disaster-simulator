@@ -126,7 +126,7 @@ const NAV_ITEMS: { id: Section; icon: typeof LayoutDashboard; labelKey: string }
 ];
 
 export default function Home() {
-  const [locale, setLocale] = useState<Locale>("tr");
+  const [locale, setLocale] = useState<Locale>("en");
   const [activeSection, setActiveSection] = useState<Section>("overview");
 
   const [status, setStatus] = useState<Status | null>(null);
@@ -169,7 +169,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // If <html lang> stays Turkish, the browser applies the Turkish uppercase rule (I -> İ) even to English text.
+    // Keep <html lang> in sync with the locale: a stale "tr" makes the browser apply the Turkish
+    // uppercase rule (I -> İ) even to English text.
     document.documentElement.lang = locale;
   }, [locale]);
 
