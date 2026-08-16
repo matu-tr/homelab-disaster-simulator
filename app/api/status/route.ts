@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getLocalState } from "@/lib/db";
+import packageJson from "@/package.json";
 
 export async function GET() {
   const state = getLocalState();
@@ -12,5 +13,6 @@ export async function GET() {
     truenasError: state.truenasError,
     truenasBackupData: state.truenasBackupData ? JSON.parse(state.truenasBackupData) : null,
     publicUrl: state.publicUrl,
+    version: packageJson.version,
   });
 }

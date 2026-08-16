@@ -102,6 +102,7 @@ type Status = {
   truenasApiUrl: string | null;
   truenasError: string | null;
   publicUrl: string | null;
+  version?: string;
 };
 
 function backupBadge(locale: Locale, status: DiskBackupInfo["status"] | undefined) {
@@ -400,6 +401,11 @@ export default function Home() {
               <Skull size={16} />
             </div>
             <span className="text-sm font-semibold leading-tight">{T("app.title")}</span>
+            {status?.version && (
+              <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                v{status.version}
+              </span>
+            )}
           </div>
           {status?.publicUrl && (
             <a

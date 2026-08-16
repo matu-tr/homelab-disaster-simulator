@@ -6,18 +6,30 @@ const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
 fs.mkdirSync(dataDir, { recursive: true });
 
 const db = new Database(path.join(dataDir, "homelab-disaster-sim.db"));
-db.pragma("journal_mode = WAL");
-db.pragma("busy_timeout = 30000");
 
 // `next build` bu modülü şema kurulumu bittiğini beklemeden birden fazla worker'da eşzamanlı
-// import edebiliyor (sadece route export'larını incelemek için) — ALTER TABLE gibi şema
-// değiştiren komutlar busy_timeout'u her zaman kapsamıyor. Bu sadece build-time'a özgü bir
-// yarış durumu (tek process'te çalışan gerçek runtime'da hiç yaşanmıyor); bir worker
-// kilitlendiğinde sessizce devam ediyoruz, tablo/kolon zaten başka bir worker tarafından
-// oluşturulmuş olacak.
+// import edebiliyor (sadece route export'larını incelemek için) — busy_timeout pragma'sı
+// journal_mode=WAL gibi mod değiştiren pragma'ları kapsamıyor (better-sqlite3 bunları hemen
+// SQLITE_BUSY ile reddediyor, retry etmiyor). Bu sadece build-time'a özgü bir yarış durumu
+// (tek process'te çalışan gerçek runtime'da hiç yaşanmıyor); kilitli olduğunda kısa süre
+// blocking-sleep ile bekleyip tekrar deniyoruz.
+function retryOnBusy<T>(fn: () => T, maxAttempts = 50): T {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return fn();
+    } catch (err) {
+      if ((err as { code?: string })?.code !== "SQLITE_BUSY" || attempt >= maxAttempts) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
+
+retryOnBusy(() => db.pragma("busy_timeout = 30000"));
+retryOnBusy(() => db.pragma("journal_mode = WAL"));
+
 function safeSchemaExec(sql: string) {
   try {
-    db.exec(sql);
+    retryOnBusy(() => db.exec(sql));
   } catch (err) {
     if ((err as { code?: string })?.code !== "SQLITE_BUSY") throw err;
   }
@@ -36,7 +48,7 @@ safeSchemaExec(`
   )
 `);
 try {
-  db.prepare("INSERT OR IGNORE INTO local_state (id) VALUES (1)").run();
+  retryOnBusy(() => db.prepare("INSERT OR IGNORE INTO local_state (id) VALUES (1)").run());
 } catch (err) {
   if ((err as { code?: string })?.code !== "SQLITE_BUSY") throw err;
 }
