@@ -174,7 +174,12 @@ export function saveError(error: string) {
 }
 
 export function saveTrueNasConfig(apiUrl: string | null, apiKey: string | null) {
-  db.prepare("UPDATE local_state SET truenasApiUrl = ?, truenasApiKey = ? WHERE id = 1").run(apiUrl, apiKey);
+  // The previous error belonged to the old address/key — clear it so a stale message doesn't
+  // look like the new settings failed. The next refresh reports a fresh one if there is one.
+  db.prepare("UPDATE local_state SET truenasApiUrl = ?, truenasApiKey = ?, truenasError = NULL WHERE id = 1").run(
+    apiUrl,
+    apiKey,
+  );
 }
 
 export function saveTrueNasBackupData(dataJson: string) {
