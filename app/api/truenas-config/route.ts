@@ -9,8 +9,12 @@ export async function POST(req: NextRequest) {
   if ((apiUrl && !apiKey) || (!apiUrl && apiKey)) {
     return NextResponse.json({ error: "The API address and key must be provided together." }, { status: 400 });
   }
-  if (apiUrl && !apiUrl.startsWith("http://") && !apiUrl.startsWith("https://")) {
-    return NextResponse.json({ error: "The API address must start with http:// or https://." }, { status: 400 });
+  // TrueNAS revokes an API key the moment it is used over an unencrypted connection.
+  if (apiUrl && !apiUrl.startsWith("https://")) {
+    return NextResponse.json(
+      { error: "The API address must start with https:// — TrueNAS revokes API keys sent over plain http." },
+      { status: 400 },
+    );
   }
 
   saveTrueNasConfig(apiUrl, apiKey);

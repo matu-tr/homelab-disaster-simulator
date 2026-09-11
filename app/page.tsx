@@ -1115,7 +1115,7 @@ export default function Home() {
                         <input
                           value={truenasApiUrl}
                           onChange={(e) => setTruenasApiUrl(e.target.value)}
-                          placeholder="http://192.168.1.10:8080"
+                          placeholder="https://192.168.1.10:8443"
                           className="rounded-md border border-border bg-background px-3 py-2 text-sm font-mono outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
                         />
                       </label>

@@ -12,6 +12,8 @@ services:
       - /mnt:/mnt:ro
     environment:
       - DATA_DIR=/app/data
+      # Uncomment if TrueNAS still uses its default self-signed certificate.
+      # - NODE_TLS_REJECT_UNAUTHORIZED=0
     restart: unless-stopped
 
 volumes:

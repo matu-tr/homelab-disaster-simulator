@@ -83,12 +83,20 @@ type RpcClient = {
 
 /**
  * TrueNAS deprecated the REST API (/api/v2.0) in 25.04 and removes it in 26.04. Its replacement is
- * JSON-RPC 2.0 over a WebSocket at /api/current. The configured address stays http(s)://…; we map
- * it to ws(s)://… here so existing settings keep working.
+ * JSON-RPC 2.0 over a WebSocket at /api/current. The configured address stays https://…; we map
+ * it to wss://… here.
+ *
+ * Only https is accepted: TrueNAS immediately revokes an API key that is sent over an unencrypted
+ * (ws://) connection, so we refuse before the key ever leaves the process.
  */
 function toWebSocketUrl(apiUrl: string): string {
   const url = new URL(apiUrl.replace(/\/+$/, ""));
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  if (url.protocol !== "https:") {
+    throw new Error(
+      "TrueNAS API address must use https:// — TrueNAS revokes API keys sent over an unencrypted connection",
+    );
+  }
+  url.protocol = "wss:";
   url.pathname = `${url.pathname.replace(/\/+$/, "")}/api/current`;
   return url.toString();
 }

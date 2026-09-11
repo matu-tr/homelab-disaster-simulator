@@ -23,6 +23,8 @@ Watches the Docker daemon of the machine it's installed on — no other hosts ar
 
 In the TrueNAS UI: **Credentials → API Keys → Add**. A read-only key is recommended (use the scoped/read-only option if available). The key is stored in plain text in the app's own SQLite database — same trust boundary as access to the Docker socket, only run this in environments you trust.
 
+The API address **must be `https://`** (e.g. `https://192.168.1.10:8443`). The app talks to TrueNAS's JSON-RPC API over a WebSocket, and TrueNAS immediately revokes any API key sent over an unencrypted connection — so `http://` addresses are rejected before the key is ever sent. TrueNAS ships with a self-signed certificate; if yours hasn't been replaced with a trusted one, set `NODE_TLS_REJECT_UNAUTHORIZED=0` in the container's environment (see the compose example below).
+
 ## Development
 
 ```bash
@@ -53,6 +55,8 @@ services:
       - /mnt:/mnt:ro
     environment:
       - DATA_DIR=/app/data
+      # Uncomment if TrueNAS still uses its default self-signed certificate.
+      # - NODE_TLS_REJECT_UNAUTHORIZED=0
     restart: unless-stopped
 
 volumes:
