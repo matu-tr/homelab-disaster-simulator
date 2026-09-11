@@ -74,16 +74,97 @@ function summarizeSchedule(schedule: { minute: string; hour: string; dom: string
   return msg("schedule.daily", { time: `${minute} ${hour} ${dom} ${month} ${dow}` });
 }
 
-async function truenasFetch(apiUrl: string, apiKey: string, path: string): Promise<unknown> {
-  const base = apiUrl.replace(/\/+$/, "");
-  const res = await fetch(`${base}${path}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(10_000),
+const CALL_TIMEOUT_MS = 10_000;
+
+type RpcClient = {
+  call: (method: string, params?: unknown[]) => Promise<unknown>;
+  close: () => void;
+};
+
+/**
+ * TrueNAS deprecated the REST API (/api/v2.0) in 25.04 and removes it in 26.04. Its replacement is
+ * JSON-RPC 2.0 over a WebSocket at /api/current. The configured address stays http(s)://…; we map
+ * it to ws(s)://… here so existing settings keep working.
+ */
+function toWebSocketUrl(apiUrl: string): string {
+  const url = new URL(apiUrl.replace(/\/+$/, ""));
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/api/current`;
+  return url.toString();
+}
+
+function openRpc(apiUrl: string): Promise<RpcClient> {
+  const ws = new WebSocket(toWebSocketUrl(apiUrl));
+  const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; method: string }>();
+  let nextId = 1;
+
+  const failAll = (err: Error) => {
+    for (const p of pending.values()) p.reject(err);
+    pending.clear();
+  };
+
+  ws.addEventListener("message", (event) => {
+    let data: { id?: number; result?: unknown; error?: { message?: string; data?: { reason?: string } } };
+    try {
+      data = JSON.parse(String(event.data));
+    } catch {
+      return;
+    }
+    // Messages without an id are server-side event notifications — we don't subscribe to any.
+    if (typeof data.id !== "number") return;
+    const p = pending.get(data.id);
+    if (!p) return;
+    pending.delete(data.id);
+    if (data.error) {
+      const reason = data.error.data?.reason || data.error.message || "unknown error";
+      p.reject(new Error(`TrueNAS API ${p.method} -> ${reason}`));
+    } else {
+      p.resolve(data.result);
+    }
   });
-  if (!res.ok) {
-    throw new Error(`TrueNAS API ${path} -> HTTP ${res.status}`);
+  ws.addEventListener("close", () => failAll(new Error("TrueNAS API connection closed")));
+
+  const client: RpcClient = {
+    call(method, params = []) {
+      const id = nextId++;
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error(`TrueNAS API ${method} -> timed out`));
+        }, CALL_TIMEOUT_MS);
+        pending.set(id, {
+          method,
+          resolve: (v) => { clearTimeout(timer); resolve(v); },
+          reject: (e) => { clearTimeout(timer); reject(e); },
+        });
+        ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+      });
+    },
+    close() {
+      ws.close();
+    },
+  };
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error("TrueNAS API connection timed out"));
+    }, CALL_TIMEOUT_MS);
+    ws.addEventListener("open", () => { clearTimeout(timer); resolve(client); }, { once: true });
+    ws.addEventListener("error", () => { clearTimeout(timer); reject(new Error("TrueNAS API connection failed")); }, { once: true });
+  });
+}
+
+async function connectTrueNas(apiUrl: string, apiKey: string): Promise<RpcClient> {
+  const rpc = await openRpc(apiUrl);
+  try {
+    const ok = await rpc.call("auth.login_with_api_key", [apiKey]);
+    if (ok !== true) throw new Error("TrueNAS API authentication failed (invalid or revoked API key)");
+    return rpc;
+  } catch (err) {
+    rpc.close();
+    throw err;
   }
-  return res.json();
 }
 
 type RawDataset = {
@@ -181,15 +262,24 @@ function flattenPhysicalDisks(pools: RawPool[], disks: RawDisk[], isBootDisk = f
 }
 
 export async function collectTrueNasBackupData(apiUrl: string, apiKey: string): Promise<TrueNasBackupData> {
+  const rpc = await connectTrueNas(apiUrl, apiKey);
+  try {
+    return await collectWith(rpc);
+  } finally {
+    rpc.close();
+  }
+}
+
+async function collectWith(rpc: RpcClient): Promise<TrueNasBackupData> {
   const [rawSnapshotTasks, rawReplicationTasks, rawDatasets, rawPools, rawDisks, rawCloudSync, rawBootState] =
     await Promise.all([
-      truenasFetch(apiUrl, apiKey, "/api/v2.0/pool/snapshottask"),
-      truenasFetch(apiUrl, apiKey, "/api/v2.0/replication"),
-      truenasFetch(apiUrl, apiKey, "/api/v2.0/pool/dataset"),
-      truenasFetch(apiUrl, apiKey, "/api/v2.0/pool"),
-      truenasFetch(apiUrl, apiKey, "/api/v2.0/disk"),
-      truenasFetch(apiUrl, apiKey, "/api/v2.0/cloudsync"),
-      truenasFetch(apiUrl, apiKey, "/api/v2.0/boot/get_state"),
+      rpc.call("pool.snapshottask.query"),
+      rpc.call("replication.query"),
+      rpc.call("pool.dataset.query"),
+      rpc.call("pool.query"),
+      rpc.call("disk.query"),
+      rpc.call("cloudsync.query"),
+      rpc.call("boot.get_state"),
     ]);
 
   const datasets = flattenDatasets(rawDatasets as RawDataset[]);
@@ -199,7 +289,7 @@ export async function collectTrueNasBackupData(apiUrl: string, apiKey: string): 
   // which disk it lives on. Its size is not available this way (marked as 0); this exists purely
   // to show which pool it is on.
   try {
-    const rawDocker = (await truenasFetch(apiUrl, apiKey, "/api/v2.0/docker")) as {
+    const rawDocker = (await rpc.call("docker.config")) as {
       dataset?: string;
       pool?: string;
     };
@@ -218,7 +308,7 @@ export async function collectTrueNasBackupData(apiUrl: string, apiKey: string): 
 
   const physicalDisks = [
     ...flattenPhysicalDisks(rawPools as RawPool[], rawDisks as RawDisk[]),
-    // The boot/OS disk is NOT in the `/api/v2.0/pool` listing — it comes from a separate endpoint.
+    // The boot/OS disk is NOT in the `pool.query` listing — it comes from a separate endpoint.
     // We add it explicitly so it isn't missed alongside the data pools (the system itself is a
     // disaster scenario too).
     ...flattenPhysicalDisks([rawBootState as RawPool], rawDisks as RawDisk[], true),
